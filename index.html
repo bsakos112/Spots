@@ -13,11 +13,17 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
         
-        body {
-            font-family: 'Inter', sans-serif;
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
             overflow: hidden;
+            height: 100vh;
+            width: 100vw;
         }
         
         #map {
@@ -59,9 +65,18 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.4);
         }
         
+        /* Full-screen flex container for login */
         .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             background: linear-gradient(135deg, rgba(74, 222, 128, 0.92), rgba(34, 197, 94, 0.96));
             backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             z-index: 6000;
         }
         
@@ -172,9 +187,9 @@
         }
     </style>
 </head>
-<body class="gradient-bg">
-    <!-- Login Screen -->
-    <div id="login-screen" class="fixed inset-0 flex items-center justify-center login-overlay visible" style="z-index: 6000;">
+<body>
+    <!-- Login Screen - perfectly centered -->
+    <div id="login-screen" class="login-overlay visible">
         <div class="card login-card max-w-md w-full mx-4 transform transition-all duration-300">
             <div class="text-center mb-8">
                 <img src="Spots logo.png" alt="Spots logo" class="w-32 h-32 mx-auto mb-4 object-contain">
@@ -200,7 +215,8 @@
         <header class="fixed top-0 left-0 right-0 glass-effect shadow-lg z-50">
             <div class="container mx-auto px-6 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <img src="Spots logo.png" alt="Spots logo" class="h-12 w-auto object-contain">
+                    <!-- Logo slightly bigger: h-14 instead of h-12 -->
+                    <img src="Spots logo.png" alt="Spots logo" class="h-14 w-auto object-contain">
                 </div>
                 <div class="flex items-center gap-6">
                     <div id="user-display" class="flex items-center gap-3 bg-white/80 px-5 py-3 rounded-full shadow-sm">
@@ -297,6 +313,11 @@
                     <i class="fas fa-times text-2xl"></i>
                 </button>
             </div>
+            <div class="mb-6 text-center">
+                <button id="random-spot-btn" class="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-3 px-6 rounded-full shadow-md transition-all hover:scale-105">
+                    <i class="fas fa-dice-d6 mr-2"></i>Pick Random Spot
+                </button>
+            </div>
             <div id="spots-list" class="space-y-6"></div>
         </div>
     </div>
@@ -327,9 +348,7 @@
             { color: '#ec4899', name: 'Pink' }
         ];
 
-        // ---------- LocalStorage persistence ----------
         function saveSpotsToLocalStorage() {
-            // Save spots without the marker references (they can't be serialized)
             const spotsToSave = state.spots.map(spot => ({
                 label: spot.label,
                 rating: spot.rating,
@@ -354,14 +373,12 @@
                     }
                 } catch(e) { console.warn("Failed to parse stored spots"); }
             }
-            // Default sample spots if nothing stored
             state.spots = [
                 { label:'Central Park Vista', rating:5, comment:'Lush greenery, peaceful trails.', user:'Alex', lat:40.7829, lng:-73.9654, color:'#22c55e', colorName:'Green' },
                 { label:'Cozy Corner Coffee', rating:4, comment:'Amazing espresso, hidden gem.', user:'Sam', lat:51.5072, lng:-0.1276, color:'#0ea5e9', colorName:'Blue' }
             ];
-            saveSpotsToLocalStorage(); // save defaults
+            saveSpotsToLocalStorage();
         }
-        // ---------------------------------------------
 
         function showElement(id) {
             const el = document.getElementById(id);
@@ -422,7 +439,7 @@
             if(state.spots[index].marker) state.map.removeLayer(state.spots[index].marker);
             if(state.activeSpotPopupIndex===index) hideElement('spot-details-popup');
             state.spots.splice(index,1);
-            saveSpotsToLocalStorage();   // persist after deletion
+            saveSpotsToLocalStorage();
             renderSpotsList();
         }
 
@@ -433,6 +450,15 @@
             document.getElementById('spot-details-popup').innerHTML = renderSpotDetailsPopup(spot, index);
             showElement('spot-details-popup');
             state.activeSpotPopupIndex = index;
+        }
+
+        function pickRandomSpot() {
+            if (!state.spots.length) {
+                alert("No spots to pick from! Add a spot first.");
+                return;
+            }
+            const randomIndex = Math.floor(Math.random() * state.spots.length);
+            viewSpotOnMap(randomIndex);
         }
 
         function selectPinColor(color, name) {
@@ -513,16 +539,12 @@
                     showElement('add-spot-modal');
                 }
             });
-            // Add all spots to map (their markers are not stored, so we recreate)
             state.spots.forEach((spot,idx) => addSpotToMap(spot,idx));
         }
 
-        // ---------- Main initialization ----------
         document.addEventListener('DOMContentLoaded', () => {
-            // Load persisted spots from localStorage (or defaults)
             loadSpotsFromLocalStorage();
 
-            // Login
             document.getElementById('login-form').addEventListener('submit', (e) => {
                 e.preventDefault();
                 const username = document.getElementById('username').value.trim();
@@ -535,12 +557,10 @@
                 initMapWithUserLocation();
             });
 
-            // Logout
             document.getElementById('logout-btn').addEventListener('click', () => {
                 if(confirm('Log out?')) resetToLogin();
             });
 
-            // Add pin button
             const addBtn = document.getElementById('add-pin-btn');
             addBtn.addEventListener('click', () => {
                 state.isAddingMode = !state.isAddingMode;
@@ -559,8 +579,8 @@
             document.getElementById('locate-me-btn').addEventListener('click', locateUserAndCenter);
             document.getElementById('close-add-modal').addEventListener('click', () => hideElement('add-spot-modal'));
             document.getElementById('close-all-modal').addEventListener('click', () => hideElement('all-spots-modal'));
+            document.getElementById('random-spot-btn').addEventListener('click', pickRandomSpot);
 
-            // Star rating
             document.getElementById('spot-rating').addEventListener('click', (e) => {
                 if(e.target.classList.contains('star')) {
                     const rating = parseInt(e.target.dataset.rating);
@@ -570,7 +590,6 @@
                 }
             });
 
-            // Add spot form submission
             document.getElementById('spot-form').addEventListener('submit', (e) => {
                 e.preventDefault();
                 const label = document.getElementById('spot-label').value.trim();
@@ -585,7 +604,7 @@
                 };
                 state.spots.push(newSpot);
                 addSpotToMap(newSpot, state.spots.length-1);
-                saveSpotsToLocalStorage();   // persist new spot
+                saveSpotsToLocalStorage();
                 if(state.tempMarker) { state.map.removeLayer(state.tempMarker); state.tempMarker = null; }
                 state.isAddingMode = false;
                 const addPin = document.getElementById('add-pin-btn');
@@ -599,7 +618,6 @@
                 alert('✅ Spot added! Click the pin to see details.');
             });
 
-            // Pin color selection
             document.querySelectorAll('.pin-color-option').forEach(opt => {
                 opt.addEventListener('click', () => {
                     const color = opt.dataset.color;
@@ -608,7 +626,6 @@
                 });
             });
 
-            // Global event delegation
             document.addEventListener('click', (e) => {
                 if(e.target.closest('.delete-spot-btn')) {
                     const idx = parseInt(e.target.closest('.delete-spot-btn').dataset.index);
