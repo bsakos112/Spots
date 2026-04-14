@@ -5,12 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Spots - Share Your Favorite Places</title>
-    <meta name="description" content="Discover and share your favorite places with a vibrant nature-inspired map experience">
+    <meta name="description" content="Discover and share your favorite spots with a vibrant nature-inspired map experience">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!-- Firebase SDKs (compat version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
     <style>
+        /* Your existing styles (unchanged) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
         
         * {
@@ -185,10 +189,9 @@
             100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
         }
 
-        /* Collapsible panel styles */
         .add-spot-panel {
             transition: all 0.3s ease;
-            width: 256px; /* w-64 */
+            width: 256px;
         }
         .add-spot-panel.collapsed {
             width: 60px;
@@ -271,7 +274,6 @@
             </div>
         </header>
 
-        <!-- Collapsible Add a Spot Panel -->
         <div id="add-spot-panel" class="fixed top-24 left-6 card add-spot-panel z-40">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="font-bold text-xl text-green-800 panel-content">Add a Spot</h3>
@@ -317,7 +319,7 @@
         <div id="spot-details-popup" class="spot-popup-sidebar hidden"></div>
     </div>
 
-    <!-- Add Spot Modal (unchanged) -->
+    <!-- Add Spot Modal -->
     <div id="add-spot-modal" class="fixed inset-0 hidden items-center justify-center modal-overlay z-50">
         <div class="card max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-8">
@@ -370,6 +372,24 @@
     </div>
 
     <script>
+        // ==================== FIREBASE CONFIGURATION ====================
+        // Your own config (already filled in)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDveam9TkwmpaE6yivQy3KJGFiCsAMlXss",
+            authDomain: "spots2-70de3.firebaseapp.com",
+            projectId: "spots2-70de3",
+            storageBucket: "spots2-70de3.firebasestorage.app",
+            messagingSenderId: "489315675280",
+            appId: "1:489315675280:web:d014293a339e10681b7c15",
+            measurementId: "G-CGQ1SNS1K6"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const spotsCollection = db.collection("spots");
+        // ================================================================
+
         // Global state
         let state = {
             currentUser: '',
@@ -383,7 +403,8 @@
             selectedPinColorName: 'Green',
             activeSpotPopupIndex: null,
             userLocation: null,
-            userLocationMarker: null
+            userLocationMarker: null,
+            markersMap: new Map()
         };
 
         const pinColors = [
@@ -394,38 +415,6 @@
             { color: '#8b5cf6', name: 'Purple' },
             { color: '#ec4899', name: 'Pink' }
         ];
-
-        function saveSpotsToLocalStorage() {
-            const spotsToSave = state.spots.map(spot => ({
-                label: spot.label,
-                rating: spot.rating,
-                comment: spot.comment,
-                user: spot.user,
-                lat: spot.lat,
-                lng: spot.lng,
-                color: spot.color,
-                colorName: spot.colorName
-            }));
-            localStorage.setItem('spots_data', JSON.stringify(spotsToSave));
-        }
-
-        function loadSpotsFromLocalStorage() {
-            const stored = localStorage.getItem('spots_data');
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        state.spots = parsed;
-                        return;
-                    }
-                } catch(e) { console.warn("Failed to parse stored spots"); }
-            }
-            state.spots = [
-                { label:'Central Park Vista', rating:5, comment:'Lush greenery, peaceful trails.', user:'Alex', lat:40.7829, lng:-73.9654, color:'#22c55e', colorName:'Green' },
-                { label:'Cozy Corner Coffee', rating:4, comment:'Amazing espresso, hidden gem.', user:'Sam', lat:51.5072, lng:-0.1276, color:'#0ea5e9', colorName:'Blue' }
-            ];
-            saveSpotsToLocalStorage();
-        }
 
         function showElement(id) {
             const el = document.getElementById(id);
@@ -439,13 +428,21 @@
         function createPinIcon(color) {
             return L.divIcon({ html: `<div class="pin-icon" style="background-color: ${color};"></div>`, iconSize: [40,40], iconAnchor: [20,40], className: 'custom-marker' });
         }
+
         function renderStars(rating) {
             let stars = '';
             for (let i=1;i<=5;i++) stars += `<i class="fas fa-star text-xl" style="color: ${i<=rating?'#fbbf24':'#d1d5db'}"></i>`;
             return stars;
         }
-        function renderUserBadge(username) { return username + (username.toLowerCase()==='bryant' ? ' <i class="fas fa-crown ml-2" style="color:#fbbf24"></i>' : ''); }
-        function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
+
+        function renderUserBadge(username) { 
+            return username + (username.toLowerCase() === 'bryant' ? ' <i class="fas fa-crown ml-2" style="color:#fbbf24"></i>' : ''); 
+        }
+
+        function escapeHtml(str) { 
+            if(!str) return ''; 
+            return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); 
+        }
         
         function getMapLink(lat, lng) {
             return `https://www.google.com/maps?q=${lat},${lng}`;
@@ -454,49 +451,160 @@
         function renderSpotsList() {
             const container = document.getElementById('spots-list');
             if(!container) return;
-            if(state.spots.length===0) {
+            if(state.spots.length === 0) {
                 container.innerHTML = `<div class="text-center py-12"><div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><i class="fas fa-map-marker-alt text-green-500 text-3xl"></i></div><h3 class="text-xl font-semibold text-green-800 mb-3">No spots yet</h3><p class="text-green-600">Be the first to add a spot!</p></div>`;
                 return;
             }
-            container.innerHTML = state.spots.map((spot,idx) => {
-                const deleteBtn = state.isAdmin ? `<button class="delete-spot-btn text-red-500 hover:text-red-700 hover:scale-110 transition-transform" data-index="${idx}"><i class="fas fa-trash"></i></button>` : '';
+            container.innerHTML = state.spots.map((spot) => {
+                const deleteBtn = state.isAdmin ? `<button class="delete-spot-btn text-red-500 hover:text-red-700 hover:scale-110 transition-transform" data-id="${spot.id}"><i class="fas fa-trash"></i></button>` : '';
                 const coordLink = `<a href="${getMapLink(spot.lat, spot.lng)}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"><i class="fas fa-external-link-alt text-xs"></i> ${spot.lat.toFixed(4)}, ${spot.lng.toFixed(4)}</a>`;
-                return `<div class="card hover:border-green-300 transition-all"><div class="flex items-start justify-between mb-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color:${spot.color}"><i class="fas fa-map-marker-alt text-white"></i></div><div><h3 class="font-bold text-xl text-green-800">${escapeHtml(spot.label)}</h3><div class="flex items-center gap-2 mt-1">${renderStars(spot.rating)}<span class="text-sm text-gray-500">${spot.rating} stars</span></div></div></div>${deleteBtn}</div><p class="text-gray-600 mb-4">${escapeHtml(spot.comment)}</p><div class="flex items-center justify-between text-sm flex-wrap gap-2"><div class="flex items-center gap-2 text-green-600"><i class="fas fa-user"></i><span>By: ${renderUserBadge(spot.user)}</span></div>${coordLink}<button class="view-on-map-btn bg-green-100 hover:bg-green-200 text-green-700 py-2 px-4 rounded-lg text-sm transition-all hover:scale-105" data-index="${idx}"><i class="fas fa-map-marker-alt mr-2"></i>View on map</button></div></div>`;
+                return `<div class="card hover:border-green-300 transition-all" data-spot-id="${spot.id}">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background-color:${spot.color}"><i class="fas fa-map-marker-alt text-white"></i></div>
+                                    <div>
+                                        <h3 class="font-bold text-xl text-green-800">${escapeHtml(spot.label)}</h3>
+                                        <div class="flex items-center gap-2 mt-1">${renderStars(spot.rating)}<span class="text-sm text-gray-500">${spot.rating} stars</span></div>
+                                    </div>
+                                </div>
+                                ${deleteBtn}
+                            </div>
+                            <p class="text-gray-600 mb-4">${escapeHtml(spot.comment)}</p>
+                            <div class="flex items-center justify-between text-sm flex-wrap gap-2">
+                                <div class="flex items-center gap-2 text-green-600"><i class="fas fa-user"></i><span>By: ${renderUserBadge(spot.user)}</span></div>
+                                ${coordLink}
+                                <button class="view-on-map-btn bg-green-100 hover:bg-green-200 text-green-700 py-2 px-4 rounded-lg text-sm transition-all hover:scale-105" data-id="${spot.id}"><i class="fas fa-map-marker-alt mr-2"></i>View on map</button>
+                            </div>
+                        </div>`;
             }).join('');
         }
 
-        function renderSpotDetailsPopup(spot, idx) {
-            const deleteBtn = state.isAdmin ? `<button class="delete-spot-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-all hover:scale-105" data-index="${idx}"><i class="fas fa-trash mr-2"></i>Delete</button>` : '';
+        function renderSpotDetailsPopup(spot, docId) {
+            const deleteBtn = state.isAdmin ? `<button class="delete-spot-btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-all hover:scale-105" data-id="${docId}"><i class="fas fa-trash mr-2"></i>Delete</button>` : '';
             const mapLink = getMapLink(spot.lat, spot.lng);
-            return `<div><div class="flex items-start justify-between mb-6"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-full flex items-center justify-center" style="background-color:${spot.color}"><i class="fas fa-map-marker-alt text-white text-xl"></i></div><div><h2 class="font-bold text-2xl text-green-800">${escapeHtml(spot.label)}</h2><div class="flex items-center gap-2 mt-1">${renderStars(spot.rating)}<span class="text-sm text-gray-500">${spot.rating} stars</span></div></div></div><button id="close-spot-details" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button></div><div class="mb-6"><p class="text-gray-700 text-lg mb-4">${escapeHtml(spot.comment)}</p></div><div class="space-y-4 mb-6"><div class="flex items-center gap-2 text-green-600"><i class="fas fa-user"></i><span>Added by: ${renderUserBadge(spot.user)}</span></div><div class="flex items-center gap-2 text-green-600"><i class="fas fa-map-pin"></i><span>📍 Coordinates: </span><a href="${mapLink}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${spot.lat.toFixed(4)}, ${spot.lng.toFixed(4)}</a><i class="fas fa-external-link-alt text-xs ml-1"></i></div><div class="flex items-center gap-2 text-green-600"><div class="w-6 h-6 rounded-full" style="background-color:${spot.color}"></div><span>${spot.colorName} Pin</span></div></div><div class="flex items-center justify-between">${deleteBtn}<button class="bg-green-100 hover:bg-green-200 text-green-700 py-2 px-4 rounded-lg text-sm" onclick="if(state.map) state.map.setView([${spot.lat},${spot.lng}],15);"><i class="fas fa-location-arrow mr-2"></i>Center Map</button></div></div>`;
+            return `<div>
+                        <div class="flex items-start justify-between mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background-color:${spot.color}"><i class="fas fa-map-marker-alt text-white text-xl"></i></div>
+                                <div>
+                                    <h2 class="font-bold text-2xl text-green-800">${escapeHtml(spot.label)}</h2>
+                                    <div class="flex items-center gap-2 mt-1">${renderStars(spot.rating)}<span class="text-sm text-gray-500">${spot.rating} stars</span></div>
+                                </div>
+                            </div>
+                            <button id="close-spot-details" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+                        </div>
+                        <div class="mb-6"><p class="text-gray-700 text-lg mb-4">${escapeHtml(spot.comment)}</p></div>
+                        <div class="space-y-4 mb-6">
+                            <div class="flex items-center gap-2 text-green-600"><i class="fas fa-user"></i><span>Added by: ${renderUserBadge(spot.user)}</span></div>
+                            <div class="flex items-center gap-2 text-green-600"><i class="fas fa-map-pin"></i><span>📍 Coordinates: </span><a href="${mapLink}" target="_blank" class="text-blue-600 underline hover:text-blue-800">${spot.lat.toFixed(4)}, ${spot.lng.toFixed(4)}</a><i class="fas fa-external-link-alt text-xs ml-1"></i></div>
+                            <div class="flex items-center gap-2 text-green-600"><div class="w-6 h-6 rounded-full" style="background-color:${spot.color}"></div><span>${spot.colorName} Pin</span></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            ${deleteBtn}
+                            <button class="bg-green-100 hover:bg-green-200 text-green-700 py-2 px-4 rounded-lg text-sm" onclick="if(state.map) state.map.setView([${spot.lat},${spot.lng}],15);"><i class="fas fa-location-arrow mr-2"></i>Center Map</button>
+                        </div>
+                    </div>`;
         }
 
-        function addSpotToMap(spot, idx) {
+        function addSpotToMap(spot, docId) {
             const marker = L.marker([spot.lat, spot.lng], { icon: createPinIcon(spot.color), zIndexOffset: 1000 }).addTo(state.map);
-            spot.marker = marker;
+            state.markersMap.set(docId, marker);
             marker.on('click', () => {
-                document.getElementById('spot-details-popup').innerHTML = renderSpotDetailsPopup(spot, idx);
+                document.getElementById('spot-details-popup').innerHTML = renderSpotDetailsPopup(spot, docId);
                 showElement('spot-details-popup');
-                state.activeSpotPopupIndex = idx;
+                state.activeSpotPopupIndex = docId;
             });
         }
 
-        function deleteSpot(index) {
-            if(!confirm('Delete this spot?')) return;
-            if(state.spots[index].marker) state.map.removeLayer(state.spots[index].marker);
-            if(state.activeSpotPopupIndex===index) hideElement('spot-details-popup');
-            state.spots.splice(index,1);
-            saveSpotsToLocalStorage();
-            renderSpotsList();
+        function clearAllMarkers() {
+            state.markersMap.forEach((marker) => {
+                state.map.removeLayer(marker);
+            });
+            state.markersMap.clear();
         }
 
-        function viewSpotOnMap(index) {
-            const spot = state.spots[index];
-            state.map.setView([spot.lat, spot.lng], 15);
-            hideElement('all-spots-modal');
-            document.getElementById('spot-details-popup').innerHTML = renderSpotDetailsPopup(spot, index);
-            showElement('spot-details-popup');
-            state.activeSpotPopupIndex = index;
+        // Real-time listener
+        let unsubscribe = null;
+        function subscribeToSpots() {
+            if (unsubscribe) unsubscribe();
+            unsubscribe = spotsCollection.orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+                snapshot.docChanges().forEach(change => {
+                    const data = change.doc.data();
+                    const spot = {
+                        id: change.doc.id,
+                        label: data.label,
+                        rating: data.rating,
+                        comment: data.comment,
+                        user: data.user,
+                        lat: data.lat,
+                        lng: data.lng,
+                        color: data.color,
+                        colorName: data.colorName
+                    };
+                    if (change.type === 'added') {
+                        if (!state.spots.find(s => s.id === spot.id)) {
+                            state.spots.unshift(spot);
+                            if (state.map && !state.markersMap.has(spot.id)) {
+                                addSpotToMap(spot, spot.id);
+                            }
+                        }
+                    } else if (change.type === 'modified') {
+                        const index = state.spots.findIndex(s => s.id === spot.id);
+                        if (index !== -1) state.spots[index] = spot;
+                        if (state.markersMap.has(spot.id)) {
+                            const marker = state.markersMap.get(spot.id);
+                            state.map.removeLayer(marker);
+                            addSpotToMap(spot, spot.id);
+                        } else if (state.map) {
+                            addSpotToMap(spot, spot.id);
+                        }
+                    } else if (change.type === 'removed') {
+                        const index = state.spots.findIndex(s => s.id === spot.id);
+                        if (index !== -1) state.spots.splice(index, 1);
+                        if (state.markersMap.has(spot.id)) {
+                            state.map.removeLayer(state.markersMap.get(spot.id));
+                            state.markersMap.delete(spot.id);
+                        }
+                    }
+                });
+                renderSpotsList();
+            }, error => {
+                console.error("Firestore listener error:", error);
+                alert("Real-time connection error. Check your internet and Firebase rules.");
+            });
+        }
+
+        async function addSpotToFirestore(spotData) {
+            try {
+                await spotsCollection.add({
+                    ...spotData,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Error adding spot: ", error);
+                alert("Failed to add spot. Check Firebase rules (must be in test mode).");
+            }
+        }
+
+        async function deleteSpotFromFirestore(docId) {
+            if(!confirm('Delete this spot?')) return;
+            try {
+                await spotsCollection.doc(docId).delete();
+            } catch (error) {
+                console.error("Error deleting spot: ", error);
+                alert("Failed to delete spot.");
+            }
+        }
+
+        function viewSpotOnMap(docId) {
+            const spot = state.spots.find(s => s.id === docId);
+            if (spot) {
+                state.map.setView([spot.lat, spot.lng], 15);
+                hideElement('all-spots-modal');
+                document.getElementById('spot-details-popup').innerHTML = renderSpotDetailsPopup(spot, docId);
+                showElement('spot-details-popup');
+                state.activeSpotPopupIndex = docId;
+            }
         }
 
         function pickRandomSpot() {
@@ -505,7 +613,8 @@
                 return;
             }
             const randomIndex = Math.floor(Math.random() * state.spots.length);
-            viewSpotOnMap(randomIndex);
+            const randomSpot = state.spots[randomIndex];
+            viewSpotOnMap(randomSpot.id);
         }
 
         function selectPinColor(color, name) {
@@ -547,9 +656,11 @@
             state.isAddingMode = false;
             state.userLocation = null;
             state.userLocationMarker = null;
+            state.markersMap.clear();
         }
 
         function resetToLogin() {
+            if (unsubscribe) unsubscribe();
             destroyMap();
             state.currentUser = '';
             state.isAdmin = false;
@@ -557,6 +668,7 @@
             state.tempMarker = null;
             state.userLocation = null;
             state.activeSpotPopupIndex = null;
+            state.spots = [];
             hideElement('app-container');
             showElement('login-screen');
             hideElement('add-spot-modal');
@@ -586,17 +698,15 @@
                     showElement('add-spot-modal');
                 }
             });
-            state.spots.forEach((spot,idx) => addSpotToMap(spot,idx));
+            subscribeToSpots();
         }
 
-        // Panel toggle functionality
         function initCollapsiblePanel() {
             const panel = document.getElementById('add-spot-panel');
             const toggleBtn = document.getElementById('toggle-panel-btn');
             if (!panel || !toggleBtn) return;
             toggleBtn.addEventListener('click', () => {
                 panel.classList.toggle('collapsed');
-                // Change icon direction
                 const icon = toggleBtn.querySelector('.panel-toggle-icon');
                 if (panel.classList.contains('collapsed')) {
                     icon.classList.remove('fa-chevron-left');
@@ -609,7 +719,6 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadSpotsFromLocalStorage();
             initCollapsiblePanel();
 
             document.getElementById('login-form').addEventListener('submit', (e) => {
@@ -657,7 +766,7 @@
                 }
             });
 
-            document.getElementById('spot-form').addEventListener('submit', (e) => {
+            document.getElementById('spot-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const label = document.getElementById('spot-label').value.trim();
                 const rating = state.selectedRating;
@@ -669,9 +778,7 @@
                     lat: state.userLocation.lat, lng: state.userLocation.lng,
                     color: state.selectedPinColor, colorName: state.selectedPinColorName
                 };
-                state.spots.push(newSpot);
-                addSpotToMap(newSpot, state.spots.length-1);
-                saveSpotsToLocalStorage();
+                await addSpotToFirestore(newSpot);
                 if(state.tempMarker) { state.map.removeLayer(state.tempMarker); state.tempMarker = null; }
                 state.isAddingMode = false;
                 const addPin = document.getElementById('add-pin-btn');
@@ -682,7 +789,7 @@
                 document.querySelectorAll('#spot-rating .star').forEach(s => s.style.color = '#d1d5db');
                 document.getElementById('rating-value').value = 0;
                 hideElement('add-spot-modal');
-                alert('✅ Spot added! Click the pin to see details.');
+                alert('✅ Spot added! It will appear for everyone.');
             });
 
             document.querySelectorAll('.pin-color-option').forEach(opt => {
@@ -695,12 +802,12 @@
 
             document.addEventListener('click', (e) => {
                 if(e.target.closest('.delete-spot-btn')) {
-                    const idx = parseInt(e.target.closest('.delete-spot-btn').dataset.index);
-                    deleteSpot(idx);
+                    const docId = e.target.closest('.delete-spot-btn').getAttribute('data-id');
+                    if(docId) deleteSpotFromFirestore(docId);
                 }
                 if(e.target.closest('.view-on-map-btn')) {
-                    const idx = parseInt(e.target.closest('.view-on-map-btn').dataset.index);
-                    viewSpotOnMap(idx);
+                    const docId = e.target.closest('.view-on-map-btn').getAttribute('data-id');
+                    if(docId) viewSpotOnMap(docId);
                 }
                 if(e.target.id === 'close-spot-details' || e.target.closest('#close-spot-details')) {
                     hideElement('spot-details-popup');
