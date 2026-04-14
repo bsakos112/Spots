@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Spots - Share Your Favorite Places</title>
-    <meta name="description" content="Discover and share your favorite spots with a vibrant nature-inspired map experience">
+    <meta name="description" content="Discover and share your favorite places with a vibrant nature-inspired map experience">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -65,7 +65,6 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.4);
         }
         
-        /* Full-screen flex container for login */
         .login-overlay {
             position: fixed;
             top: 0;
@@ -185,10 +184,51 @@
             70% { box-shadow: 0 0 0 12px rgba(59,130,246,0); }
             100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
         }
+
+        /* Collapsible panel styles */
+        .add-spot-panel {
+            transition: all 0.3s ease;
+            width: 256px; /* w-64 */
+        }
+        .add-spot-panel.collapsed {
+            width: 60px;
+            padding: 16px 12px;
+        }
+        .add-spot-panel.collapsed .panel-content {
+            display: none;
+        }
+        .add-spot-panel.collapsed .panel-toggle-icon {
+            transform: rotate(180deg);
+        }
+        .panel-toggle-btn {
+            cursor: pointer;
+            background: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        .panel-toggle-btn:hover {
+            background: #f0fdf4;
+            transform: scale(1.05);
+        }
+        @media (max-width: 640px) {
+            .add-spot-panel {
+                top: 80px;
+                left: 10px;
+            }
+            .add-spot-panel.collapsed {
+                width: 52px;
+            }
+        }
     </style>
 </head>
 <body>
-    <!-- Login Screen - perfectly centered -->
+    <!-- Login Screen -->
     <div id="login-screen" class="login-overlay visible">
         <div class="card login-card max-w-md w-full mx-4 transform transition-all duration-300">
             <div class="text-center mb-8">
@@ -215,7 +255,6 @@
         <header class="fixed top-0 left-0 right-0 glass-effect shadow-lg z-50">
             <div class="container mx-auto px-6 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <!-- Logo slightly bigger: h-14 instead of h-12 -->
                     <img src="Spots logo.png" alt="Spots logo" class="h-14 w-auto object-contain">
                 </div>
                 <div class="flex items-center gap-6">
@@ -232,24 +271,32 @@
             </div>
         </header>
 
-        <div class="fixed top-24 left-6 card w-64 z-40">
-            <h3 class="font-bold text-xl text-green-800 mb-4">Add a Spot</h3>
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-green-700 mb-3">Pin Color</label>
-                <div class="flex gap-2 flex-wrap">
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-green-500 cursor-pointer border-2 border-white shadow-md selected" data-color="#22c55e"></div>
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-blue-500 cursor-pointer border-2 border-white shadow-md" data-color="#0ea5e9"></div>
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-red-500 cursor-pointer border-2 border-white shadow-md" data-color="#ef4444"></div>
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-yellow-500 cursor-pointer border-2 border-white shadow-md" data-color="#eab308"></div>
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-purple-500 cursor-pointer border-2 border-white shadow-md" data-color="#8b5cf6"></div>
-                    <div class="pin-color-option w-8 h-8 rounded-full bg-pink-500 cursor-pointer border-2 border-white shadow-md" data-color="#ec4899"></div>
+        <!-- Collapsible Add a Spot Panel -->
+        <div id="add-spot-panel" class="fixed top-24 left-6 card add-spot-panel z-40">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-xl text-green-800 panel-content">Add a Spot</h3>
+                <div class="panel-toggle-btn" id="toggle-panel-btn">
+                    <i class="fas fa-chevron-left panel-toggle-icon text-green-700"></i>
                 </div>
             </div>
-            <button id="add-pin-btn" class="btn-primary w-full py-3">
-                <i class="fas fa-plus mr-2"></i>Click to Place Pin
-            </button>
-            <div class="mt-4 text-sm text-gray-600">
-                <p>Selected: <span id="selected-color-name" class="font-semibold text-green-700">Green</span></p>
+            <div class="panel-content">
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-green-700 mb-3">Pin Color</label>
+                    <div class="flex gap-2 flex-wrap">
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-green-500 cursor-pointer border-2 border-white shadow-md selected" data-color="#22c55e"></div>
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-blue-500 cursor-pointer border-2 border-white shadow-md" data-color="#0ea5e9"></div>
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-red-500 cursor-pointer border-2 border-white shadow-md" data-color="#ef4444"></div>
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-yellow-500 cursor-pointer border-2 border-white shadow-md" data-color="#eab308"></div>
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-purple-500 cursor-pointer border-2 border-white shadow-md" data-color="#8b5cf6"></div>
+                        <div class="pin-color-option w-8 h-8 rounded-full bg-pink-500 cursor-pointer border-2 border-white shadow-md" data-color="#ec4899"></div>
+                    </div>
+                </div>
+                <button id="add-pin-btn" class="btn-primary w-full py-3">
+                    <i class="fas fa-plus mr-2"></i>Click to Place Pin
+                </button>
+                <div class="mt-4 text-sm text-gray-600">
+                    <p>Selected: <span id="selected-color-name" class="font-semibold text-green-700">Green</span></p>
+                </div>
             </div>
         </div>
 
@@ -270,7 +317,7 @@
         <div id="spot-details-popup" class="spot-popup-sidebar hidden"></div>
     </div>
 
-    <!-- Add Spot Modal -->
+    <!-- Add Spot Modal (unchanged) -->
     <div id="add-spot-modal" class="fixed inset-0 hidden items-center justify-center modal-overlay z-50">
         <div class="card max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-8">
@@ -542,8 +589,28 @@
             state.spots.forEach((spot,idx) => addSpotToMap(spot,idx));
         }
 
+        // Panel toggle functionality
+        function initCollapsiblePanel() {
+            const panel = document.getElementById('add-spot-panel');
+            const toggleBtn = document.getElementById('toggle-panel-btn');
+            if (!panel || !toggleBtn) return;
+            toggleBtn.addEventListener('click', () => {
+                panel.classList.toggle('collapsed');
+                // Change icon direction
+                const icon = toggleBtn.querySelector('.panel-toggle-icon');
+                if (panel.classList.contains('collapsed')) {
+                    icon.classList.remove('fa-chevron-left');
+                    icon.classList.add('fa-chevron-right');
+                } else {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-left');
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             loadSpotsFromLocalStorage();
+            initCollapsiblePanel();
 
             document.getElementById('login-form').addEventListener('submit', (e) => {
                 e.preventDefault();
