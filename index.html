@@ -6,11 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Spots - Share Your Favorite Places</title>
     <meta name="description" content="Discover and share your favorite spots with a vibrant nature-inspired map experience">
+    
+    <!-- Custom icon for iPhone home screen (no startup image) -->
+    <link rel="apple-touch-icon" href="Spots icon.png">
+    
+    <!-- Optional standalone mode (no browser chrome) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Spots">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <!-- Firebase SDKs (compat version) -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
     <style>
@@ -103,7 +112,7 @@
             background: linear-gradient(135deg, #059669, #10b981);
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 12px;
             font-weight: 600;
             transition: all 0.3s;
@@ -119,18 +128,24 @@
         .card {
             background: white;
             border-radius: 24px;
-            padding: 28px;
+            padding: 24px;
             box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.3);
             transition: all 0.3s;
+        }
+        
+        /* Smaller login card */
+        .login-card {
+            max-width: 340px;
+            padding: 20px;
         }
         
         .input-field {
             background: white;
             border: 2px solid #dcfce7;
             border-radius: 16px;
-            padding: 14px 18px;
-            font-size: 16px;
+            padding: 12px 16px;
+            font-size: 15px;
             transition: all 0.3s;
             width: 100%;
         }
@@ -231,34 +246,34 @@
     </style>
 </head>
 <body>
-    <!-- Login Screen -->
+    <!-- Login Screen - smaller card -->
     <div id="login-screen" class="login-overlay visible">
-        <div class="card login-card max-w-md w-full mx-4 transform transition-all duration-300">
-            <div class="text-center mb-8">
-                <img src="Spots logo.png" alt="Spots logo" class="w-32 h-32 mx-auto mb-4 object-contain">
-                <p class="text-green-700 text-lg font-medium">Discover & share favorite places</p>
+        <div class="card login-card transform transition-all duration-300">
+            <div class="text-center mb-6">
+                <img src="Spots icon.png" alt="Spots logo" class="w-20 h-20 mx-auto mb-3 object-contain">
+                <p class="text-green-700 text-md font-medium">Discover & share favorite places</p>
             </div>
-            <form id="login-form" class="space-y-6">
+            <form id="login-form" class="space-y-5">
                 <div>
-                    <label for="username" class="block text-sm font-semibold text-green-700 mb-2 ml-1">Your name</label>
-                    <input type="text" id="username" required placeholder="e.g., Alex, Jamie, Bryant" class="input-field" autocomplete="off">
+                    <label for="username" class="block text-sm font-semibold text-green-700 mb-1 ml-1">Your name</label>
+                    <input type="text" id="username" required placeholder="e.g., Alex, Jamie" class="input-field" autocomplete="off">
                 </div>
-                <button type="submit" class="btn-primary w-full py-4 text-lg rounded-xl shadow-md">
+                <button type="submit" class="btn-primary w-full py-3 text-md rounded-xl shadow-md">
                     <i class="fas fa-arrow-right mr-2"></i>Enter Spots
                 </button>
-                <p class="text-xs text-center text-green-600 mt-4">✨ Click anywhere on the map to add a spot</p>
+                <p class="text-xs text-center text-green-600 mt-2">✨ Click anywhere on the map to add a spot</p>
             </form>
         </div>
     </div>
 
-    <!-- Main App Container -->
+    <!-- Main App Container (unchanged) -->
     <div id="app-container" class="hidden">
         <div id="map"></div>
 
         <header class="fixed top-0 left-0 right-0 glass-effect shadow-lg z-50">
             <div class="container mx-auto px-6 py-4 flex items-center justify-between">
                 <div class="flex items-center gap-4">
-                    <img src="Spots logo.png" alt="Spots logo" class="h-14 w-auto object-contain">
+                    <img src="Spots icon.png" alt="Spots logo" class="h-14 w-auto object-contain">
                 </div>
                 <div class="flex items-center gap-6">
                     <div id="user-display" class="flex items-center gap-3 bg-white/80 px-5 py-3 rounded-full shadow-sm">
@@ -373,7 +388,6 @@
 
     <script>
         // ==================== FIREBASE CONFIGURATION ====================
-        // Your own config (already filled in)
         const firebaseConfig = {
             apiKey: "AIzaSyDveam9TkwmpaE6yivQy3KJGFiCsAMlXss",
             authDomain: "spots2-70de3.firebaseapp.com",
@@ -384,13 +398,12 @@
             measurementId: "G-CGQ1SNS1K6"
         };
         
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const spotsCollection = db.collection("spots");
         // ================================================================
 
-        // Global state
+        // Global state (same as before, unchanged)
         let state = {
             currentUser: '',
             isAdmin: false,
@@ -523,7 +536,6 @@
             state.markersMap.clear();
         }
 
-        // Real-time listener
         let unsubscribe = null;
         function subscribeToSpots() {
             if (unsubscribe) unsubscribe();
